@@ -116,4 +116,90 @@ function Initialize-VdfData {
     Write-Utf8NoBom (Join-Path $PersistDir 'Settings.json') $settings
 }
 
-Export-ModuleMember -Function ConvertTo-VdfSettings, Merge-VdfBlacklistedGroups, Initialize-VdfData
+function Get-VdfFileState([string]$Folder) {
+    @(Get-ChildItem -LiteralPath $Folder -File | Sort-Object Name | ForEach-Object {
+            [ordered]@{ name = $_.Name; size = $_.Length; lastWriteUtc = $_.LastWriteTimeUtc.ToString('o') }
+        })
+}
+
+function Get-VdfSnapshotFolders([string]$SnapshotRoot) {
+    @(Get-ChildItem -LiteralPath $SnapshotRoot -Directory -ErrorAction SilentlyContinue |
+            Where-Object Name -Match '^\d{8}-\d{6}$' | Sort-Object Name)
+}
+
+function Save-VdfSnapshot {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)][string]$DataFolder,
+        [Parameter(Mandatory)][string]$SnapshotRoot,
+        [ValidateRange(1, 100)][int]$Keep = 2
+    )
+    Assert-VdfNotRunning
+    $state = @(Get-VdfFileState $DataFolder)
+    $stateJson = ConvertTo-Json -InputObject $state -Depth 5 -Compress
+
+    $newest = Get-VdfSnapshotFolders $SnapshotRoot | Select-Object -Last 1
+    if ($newest -and (Test-Path -LiteralPath "$($newest.FullName)\manifest.json")) {
+        $old = ConvertFrom-VdfJson (Get-Content -LiteralPath "$($newest.FullName)\manifest.json" -Raw)
+        if ((ConvertTo-Json -InputObject @($old) -Depth 5 -Compress) -eq $stateJson) { return $null }
+    }
+
+    $time = Get-Date
+    do {
+        $name = $time.ToString('yyyyMMdd-HHmmss')
+        $time = $time.AddSeconds(1)
+    } while ((Test-Path -LiteralPath "$SnapshotRoot\$name") -or (Test-Path -LiteralPath "$SnapshotRoot\$name.partial"))
+    $partial = Join-Path $SnapshotRoot "$name.partial"
+    $final = Join-Path $SnapshotRoot $name
+
+    try {
+        New-Item -ItemType Directory -Force $partial | Out-Null
+        foreach ($f in $state) {
+            Copy-Item -LiteralPath (Join-Path $DataFolder $f.name) -Destination (Join-Path $partial $f.name) -ErrorAction Stop
+        }
+        Write-Utf8NoBom (Join-Path $partial 'manifest.json') $stateJson
+        Rename-Item -LiteralPath $partial -NewName $name -ErrorAction Stop
+    } catch {
+        Remove-Item -LiteralPath $partial -Recurse -Force -ErrorAction SilentlyContinue
+        throw
+    }
+
+    $all = @(Get-VdfSnapshotFolders $SnapshotRoot)
+    if ($all.Count -gt $Keep) {
+        $all | Select-Object -First ($all.Count - $Keep) | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force }
+    }
+    $final
+}
+
+function Invoke-Scoop([string[]]$ScoopArgs) {
+    & scoop @ScoopArgs
+    if ($LASTEXITCODE) { throw "scoop $($ScoopArgs -join ' ') failed with exit code $LASTEXITCODE" }
+}
+
+function Invoke-VdfRollback {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Version,
+        [string]$DataFolder = 'C:\Tools\data\vdf',
+        [string]$SnapshotRoot = 'C:\Tools\data\vdf-snapshots'
+    )
+    $snap = Save-VdfSnapshot -DataFolder $DataFolder -SnapshotRoot $SnapshotRoot
+    if ($snap) { Write-Host "Snapshot: $snap" } else { Write-Host 'Snapshot: unchanged since the last one' }
+    Invoke-Scoop -ScoopArgs @('reset', "vdf@$Version")
+}
+
+function Register-VdfSnapshotTask {
+    [CmdletBinding()]
+    param([string]$At = '04:30')
+    $pwsh = (Get-Command pwsh -ErrorAction Stop).Source
+    $script = Join-Path $PSScriptRoot 'vdf-nightly.ps1'
+    $action = New-ScheduledTaskAction -Execute $pwsh -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -File `"$script`""
+    $trigger = New-ScheduledTaskTrigger -Daily -At $At
+    $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopIfGoingOnBatteries -AllowStartIfOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 2)
+    Register-ScheduledTask -TaskName 'VDF data snapshot' -Action $action -Trigger $trigger -Settings $settings `
+        -Description 'Snapshot C:\Tools\data\vdf (skips while VDF runs or when unchanged), then the VDF post-update check.' -Force
+}
+
+Export-ModuleMember -Function ConvertTo-VdfSettings, Merge-VdfBlacklistedGroups, Initialize-VdfData,
+Save-VdfSnapshot, Invoke-VdfRollback, Register-VdfSnapshotTask, Invoke-Scoop

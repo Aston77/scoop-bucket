@@ -195,3 +195,104 @@ Describe 'Initialize-VdfData' -Skip:(-not $IsPs7) {
         Should -Invoke Get-Process -ModuleName VdfTools -Times 1
     }
 }
+
+Describe 'Save-VdfSnapshot' -Skip:(-not $IsPs7) {
+    BeforeAll {
+        function Get-Hashes([string]$Dir) {
+            Get-ChildItem $Dir -File | Where-Object Name -ne 'manifest.json' | Sort-Object Name |
+                ForEach-Object { '{0}|{1}' -f $_.Name, (Get-FileHash $_.FullName).Hash }
+        }
+        function Get-Snapshots([string]$Root) {
+            @(Get-ChildItem $Root -Directory -ErrorAction SilentlyContinue | Sort-Object Name)
+        }
+    }
+
+    BeforeEach {
+        $root = Join-Path $TestDrive ([guid]::NewGuid())
+        $data = New-Item -ItemType Directory "$root\data" -Force
+        $snaps = "$root\snapshots"
+        Set-Content "$data\ScannedFiles.db" 'db v1'
+        Set-Content "$data\UnionEmbeddings.db" 'union'
+        Set-Content "$data\BlacklistedGroups.json" '{}'
+        Mock Get-Process -ModuleName VdfTools { }
+    }
+
+    It 'creates a snapshot with an identical file set and hashes' {
+        $path = Save-VdfSnapshot -DataFolder $data -SnapshotRoot $snaps
+        $path | Should -Exist
+        Split-Path $path -Leaf | Should -Match '^\d{8}-\d{6}$'
+        Get-Hashes $path | Should -Be (Get-Hashes $data)
+        "$path\manifest.json" | Should -Exist
+    }
+
+    It 'returns $null and copies nothing when nothing changed' {
+        Save-VdfSnapshot -DataFolder $data -SnapshotRoot $snaps | Out-Null
+        Save-VdfSnapshot -DataFolder $data -SnapshotRoot $snaps | Should -BeNullOrEmpty
+        (Get-Snapshots $snaps).Count | Should -Be 1
+    }
+
+    It 'makes a new snapshot after a change and keeps exactly 2' {
+        Save-VdfSnapshot -DataFolder $data -SnapshotRoot $snaps | Out-Null
+        Set-Content "$data\ScannedFiles.db" 'db v2'
+        Save-VdfSnapshot -DataFolder $data -SnapshotRoot $snaps | Should -Not -BeNullOrEmpty
+        Set-Content "$data\ScannedFiles.db" 'db v3 longer'
+        $last = Save-VdfSnapshot -DataFolder $data -SnapshotRoot $snaps
+        $all = Get-Snapshots $snaps
+        $all.Count | Should -Be 2
+        $all[-1].FullName | Should -Be $last
+        Get-Content "$last\ScannedFiles.db" | Should -Be 'db v3 longer'
+    }
+
+    It 'refuses while VDF is running and creates nothing (Review Focus 4)' {
+        Mock Get-Process -ModuleName VdfTools { [pscustomobject]@{ Name = 'VDF.GUI' } }
+        { Save-VdfSnapshot -DataFolder $data -SnapshotRoot $snaps } | Should -Throw '*running*'
+        Test-Path $snaps | Should -BeFalse
+    }
+
+    It 'removes the partial folder, keeps older snapshots and throws when a copy fails (Review Focus 5)' {
+        $first = Save-VdfSnapshot -DataFolder $data -SnapshotRoot $snaps
+        Set-Content "$data\ScannedFiles.db" 'db v2'
+        $global:VdfCopyCount = 0
+        Mock Copy-Item -ModuleName VdfTools {
+            $global:VdfCopyCount++
+            if ($global:VdfCopyCount -gt 1) { throw 'There is not enough space on the disk.' }
+            Microsoft.PowerShell.Management\Copy-Item @PesterBoundParameters
+        }
+        { Save-VdfSnapshot -DataFolder $data -SnapshotRoot $snaps } | Should -Throw '*not enough space*'
+        $all = Get-Snapshots $snaps
+        $all.Count | Should -Be 1
+        $all[0].FullName | Should -Be $first
+        Get-Hashes $first | Should -Not -BeNullOrEmpty
+        @(Get-ChildItem $snaps -Filter '*.partial').Count | Should -Be 0
+    }
+}
+
+Describe 'Invoke-VdfRollback' -Skip:(-not $IsPs7) {
+    It 'never resets when the snapshot throws' {
+        Mock Save-VdfSnapshot -ModuleName VdfTools { throw 'VDF is running' }
+        Mock Invoke-Scoop -ModuleName VdfTools { }
+        { Invoke-VdfRollback -Version '4.1.20261009.1645' } | Should -Throw '*running*'
+        Should -Invoke Invoke-Scoop -ModuleName VdfTools -Times 0
+    }
+
+    It 'snapshots, then resets to the named version' {
+        Mock Save-VdfSnapshot -ModuleName VdfTools { 'C:\snap' }
+        Mock Invoke-Scoop -ModuleName VdfTools { }
+        Invoke-VdfRollback -Version '4.1.20261009.1645'
+        Should -Invoke Save-VdfSnapshot -ModuleName VdfTools -Times 1
+        Should -Invoke Invoke-Scoop -ModuleName VdfTools -Times 1 -ParameterFilter {
+            ($ScoopArgs -join ' ') -eq 'reset vdf@4.1.20261009.1645'
+        }
+    }
+}
+
+Describe 'Register-VdfSnapshotTask' -Skip:(-not $IsPs7) {
+    It 'registers a daily per-user task named VDF data snapshot running the nightly script' {
+        Mock Register-ScheduledTask -ModuleName VdfTools { }
+        Register-VdfSnapshotTask -At '04:30'
+        Should -Invoke Register-ScheduledTask -ModuleName VdfTools -Times 1 -ParameterFilter {
+            $TaskName -eq 'VDF data snapshot' -and $Action.Arguments -like '*vdf-nightly.ps1*' -and
+            ([datetime]$Trigger.StartBoundary).ToString('HH:mm') -eq '04:30'
+        }
+    }
+}
