@@ -13,3 +13,7 @@ try {
 } catch {
     Add-Content -LiteralPath $log "$stamp FAILED: $($_.Exception.Message)"
 }
+# After any update (UniGetUI included): data-folder guard and pinned AI model check, logged to checks.log.
+if (Test-Path -LiteralPath 'C:\Tools\scoop\apps\vdf\current\manifest.json') {
+    Invoke-VdfPostUpdateCheck | Out-Null
+}

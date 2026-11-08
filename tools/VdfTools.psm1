@@ -201,5 +201,83 @@ function Register-VdfSnapshotTask {
         -Description 'Snapshot C:\Tools\data\vdf (skips while VDF runs or when unchanged), then the VDF post-update check.' -Force
 }
 
+function Test-VdfDataFolder {
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param([Parameter(Mandatory, Position = 0)][string]$DataFolder)
+    if (-not (Test-Path -LiteralPath $DataFolder -PathType Container)) {
+        Write-Error "VDF data folder not found: $DataFolder. VDF would start an empty database. Fix the folder before running VDF."
+        return $false
+    }
+    $db = Join-Path $DataFolder 'ScannedFiles.db'
+    if (-not (Test-Path -LiteralPath $db -PathType Leaf) -or (Get-Item -LiteralPath $db).Length -eq 0) {
+        Write-Error "VDF database missing or empty: $db. VDF would start an empty database. Fix the folder before running VDF."
+        return $false
+    }
+    $true
+}
+
+function Test-VdfAiModel {
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory)][string]$AiFolder,
+        [Parameter(Mandatory)][string]$Commit,
+        [switch]$Fix
+    )
+    $uri = "https://raw.githubusercontent.com/0x90d/videoduplicatefinder/$Commit/VDF.Core/AI/AiComponents.cs"
+    $source = [string](Invoke-RestMethod -Uri $uri -ErrorAction Stop)
+    if ($source -notmatch 'ModelSha256\s*=\s*"([0-9a-fA-F]{64})"') {
+        throw "ModelSha256 not found in $uri"
+    }
+    $pinned = $Matches[1].ToLowerInvariant()
+    $model = Join-Path $AiFolder 'dinov2-small-int8.onnx'
+    if (-not (Test-Path -LiteralPath $model -PathType Leaf)) {
+        Write-Warning "AI model not present: $model (VDF downloads it when needed)."
+        return $false
+    }
+    $actual = (Get-FileHash -LiteralPath $model -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -eq $pinned) { return $true }
+    Write-Warning "AI model $model has SHA256 $actual; build $Commit pins $pinned."
+    if ($Fix) {
+        Remove-Item -LiteralPath $model -Force
+        Write-Warning "Deleted $model so VDF downloads the pinned model."
+    }
+    $false
+}
+
+function Get-VdfCliArgs {
+    [OutputType([string[]])]
+    param([string[]]$UserArgs = @(), [string]$DataFolder = 'C:\Tools\data\vdf')
+    @($UserArgs) + @('--db', $DataFolder)
+}
+
+function Invoke-VdfPostUpdateCheck {
+    [CmdletBinding()]
+    param(
+        [string]$AppDir = 'C:\Tools\scoop\apps\vdf\current',
+        [string]$DataFolder = 'C:\Tools\data\vdf',
+        [string]$AiFolder = 'C:\Tools\scoop\persist\vdf\ai',
+        [string]$LogFile = 'C:\Tools\data\vdf-snapshots\checks.log'
+    )
+    $stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+    $version = '?'; $commit = '?'
+    try {
+        $manifest = ConvertFrom-VdfJson (Get-Content -LiteralPath (Join-Path $AppDir 'manifest.json') -Raw)
+        $version = $manifest['version']
+        if ([string]$manifest['notes'] -notmatch 'commit ([0-9a-f]{7,40})') { throw 'no commit in manifest notes' }
+        $commit = $Matches[1]
+        $data = if (Test-VdfDataFolder -DataFolder $DataFolder -ErrorAction SilentlyContinue) { 'OK' } else { "FAIL (missing or empty: $DataFolder)" }
+        $ai = if (Test-VdfAiModel -AiFolder $AiFolder -Commit $commit -Fix) { 'OK' } else { 'MISMATCH (model deleted; VDF re-downloads)' }
+        $line = "$stamp vdf $version commit $commit data=$data ai=$ai"
+    } catch {
+        $line = "$stamp vdf $version commit $commit FAILED: $($_.Exception.Message)"
+    }
+    New-Item -ItemType Directory -Force (Split-Path $LogFile) | Out-Null
+    Add-Content -LiteralPath $LogFile $line
+    $line
+}
+
 Export-ModuleMember -Function ConvertTo-VdfSettings, Merge-VdfBlacklistedGroups, Initialize-VdfData,
-Save-VdfSnapshot, Invoke-VdfRollback, Register-VdfSnapshotTask, Invoke-Scoop
+Save-VdfSnapshot, Invoke-VdfRollback, Register-VdfSnapshotTask, Invoke-Scoop,
+Test-VdfDataFolder, Test-VdfAiModel, Get-VdfCliArgs, Invoke-VdfPostUpdateCheck

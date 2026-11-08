@@ -296,3 +296,89 @@ Describe 'Register-VdfSnapshotTask' -Skip:(-not $IsPs7) {
         }
     }
 }
+
+Describe 'Test-VdfDataFolder' -Skip:(-not $IsPs7) {
+    BeforeEach {
+        $data = Join-Path $TestDrive ([guid]::NewGuid())
+    }
+
+    It 'is false for a missing folder' {
+        Test-VdfDataFolder -DataFolder $data -ErrorAction SilentlyContinue | Should -BeFalse
+    }
+
+    It 'is false for an empty ScannedFiles.db' {
+        New-Item -ItemType Directory $data | Out-Null
+        New-Item -ItemType File "$data\ScannedFiles.db" | Out-Null
+        Test-VdfDataFolder -DataFolder $data -ErrorAction SilentlyContinue | Should -BeFalse
+    }
+
+    It 'is false with an error naming the path when the folder was renamed away (Review Focus 2)' {
+        New-Item -ItemType Directory $data | Out-Null
+        Set-Content "$data\ScannedFiles.db" 'db'
+        Rename-Item $data "$(Split-Path $data -Leaf).off"
+        Test-VdfDataFolder -DataFolder $data -ErrorVariable ev -ErrorAction SilentlyContinue | Should -BeFalse
+        ($ev | Out-String) | Should -BeLike "*$data*"
+    }
+
+    It 'is true for a folder with a non-empty ScannedFiles.db' {
+        New-Item -ItemType Directory $data | Out-Null
+        Set-Content "$data\ScannedFiles.db" 'db'
+        Test-VdfDataFolder -DataFolder $data | Should -BeTrue
+    }
+}
+
+Describe 'Test-VdfAiModel' -Skip:(-not $IsPs7) {
+    BeforeEach {
+        $ai = New-Item -ItemType Directory (Join-Path $TestDrive ([guid]::NewGuid()))
+        Set-Content "$ai\dinov2-small-int8.onnx" 'fake model' -NoNewline
+        $hash = (Get-FileHash "$ai\dinov2-small-int8.onnx").Hash.ToLower()
+    }
+
+    It 'is true when the model matches the pinned hash' {
+        Mock Invoke-RestMethod -ModuleName VdfTools { "public const string ModelSha256 = `"$hash`";" }
+        Test-VdfAiModel -AiFolder $ai -Commit 'abc1234' | Should -BeTrue
+        Should -Invoke Invoke-RestMethod -ModuleName VdfTools -Times 1 -ParameterFilter {
+            $Uri -eq 'https://raw.githubusercontent.com/0x90d/videoduplicatefinder/abc1234/VDF.Core/AI/AiComponents.cs'
+        }
+    }
+
+    It 'deletes the model and is false on a mismatch with -Fix' {
+        Mock Invoke-RestMethod -ModuleName VdfTools { 'public const string ModelSha256 = "' + ('0' * 64) + '";' }
+        Test-VdfAiModel -AiFolder $ai -Commit 'abc1234' -Fix -WarningAction SilentlyContinue | Should -BeFalse
+        "$ai\dinov2-small-int8.onnx" | Should -Not -Exist
+    }
+
+    It 'keeps the model on a mismatch without -Fix' {
+        Mock Invoke-RestMethod -ModuleName VdfTools { 'public const string ModelSha256 = "' + ('0' * 64) + '";' }
+        Test-VdfAiModel -AiFolder $ai -Commit 'abc1234' -WarningAction SilentlyContinue | Should -BeFalse
+        "$ai\dinov2-small-int8.onnx" | Should -Exist
+    }
+
+    It 'throws when the pinned hash cannot be found in the source' {
+        Mock Invoke-RestMethod -ModuleName VdfTools { 'no hash here' }
+        { Test-VdfAiModel -AiFolder $ai -Commit 'abc1234' -Fix } | Should -Throw '*ModelSha256*'
+        "$ai\dinov2-small-int8.onnx" | Should -Exist
+    }
+}
+
+Describe 'Get-VdfCliArgs' -Skip:(-not $IsPs7) {
+    It 'puts --db last, after the user arguments' {
+        Get-VdfCliArgs -UserArgs @('db', 'export', '-o', 'x.json') |
+            Should -Be @('db', 'export', '-o', 'x.json', '--db', 'C:\Tools\data\vdf')
+    }
+}
+
+Describe 'Invoke-VdfPostUpdateCheck' -Skip:(-not $IsPs7) {
+    It 'checks the AI model against the commit in the installed manifest and logs one line' {
+        $app = New-Item -ItemType Directory (Join-Path $TestDrive ([guid]::NewGuid()))
+        '{"version":"4.1.1","notes":"Built from upstream commit abc1234. Data folder: C:/Tools/data/vdf."}' |
+            Set-Content "$app\manifest.json"
+        $log = Join-Path $TestDrive "checks-$([guid]::NewGuid()).log"
+        Mock Test-VdfDataFolder -ModuleName VdfTools { $true }
+        Mock Test-VdfAiModel -ModuleName VdfTools { $true }
+        Invoke-VdfPostUpdateCheck -AppDir $app -LogFile $log
+        Should -Invoke Test-VdfAiModel -ModuleName VdfTools -Times 1 -ParameterFilter { $Commit -eq 'abc1234' -and $Fix }
+        @(Get-Content $log).Count | Should -Be 1
+        Get-Content $log | Should -BeLike '*4.1.1*abc1234*OK*'
+    }
+}
