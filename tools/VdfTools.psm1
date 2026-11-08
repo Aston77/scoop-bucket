@@ -263,7 +263,11 @@ function Invoke-VdfPostUpdateCheck {
     $stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $version = '?'; $commit = '?'
     try {
-        $manifest = ConvertFrom-VdfJson (Get-Content -LiteralPath (Join-Path $AppDir 'manifest.json') -Raw)
+        # Scoop 0.6+ names the installed manifest scoop-manifest.json; older Scoop used manifest.json.
+        $manifestPath = @('scoop-manifest.json', 'manifest.json') | ForEach-Object { Join-Path $AppDir $_ } |
+            Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+        if (-not $manifestPath) { throw "no scoop-manifest.json or manifest.json in $AppDir" }
+        $manifest = ConvertFrom-VdfJson (Get-Content -LiteralPath $manifestPath -Raw)
         $version = $manifest['version']
         if ([string]$manifest['notes'] -notmatch 'commit ([0-9a-f]{7,40})') { throw 'no commit in manifest notes' }
         $commit = $Matches[1]

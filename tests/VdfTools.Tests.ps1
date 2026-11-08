@@ -372,7 +372,7 @@ Describe 'Invoke-VdfPostUpdateCheck' -Skip:(-not $IsPs7) {
     It 'checks the AI model against the commit in the installed manifest and logs one line' {
         $app = New-Item -ItemType Directory (Join-Path $TestDrive ([guid]::NewGuid()))
         '{"version":"4.1.1","notes":"Built from upstream commit abc1234. Data folder: C:/Tools/data/vdf."}' |
-            Set-Content "$app\manifest.json"
+            Set-Content "$app\scoop-manifest.json"
         $log = Join-Path $TestDrive "checks-$([guid]::NewGuid()).log"
         Mock Test-VdfDataFolder -ModuleName VdfTools { $true }
         Mock Test-VdfAiModel -ModuleName VdfTools { $true }

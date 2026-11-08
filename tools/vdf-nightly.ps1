@@ -14,6 +14,7 @@ try {
     Add-Content -LiteralPath $log "$stamp FAILED: $($_.Exception.Message)"
 }
 # After any update (UniGetUI included): data-folder guard and pinned AI model check, logged to checks.log.
-if (Test-Path -LiteralPath 'C:\Tools\scoop\apps\vdf\current\manifest.json') {
+# A missing manifest is logged by the check itself, so it never skips silently.
+if (Test-Path -LiteralPath 'C:\Tools\scoop\apps\vdf\current') {
     Invoke-VdfPostUpdateCheck | Out-Null
 }
