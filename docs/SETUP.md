@@ -333,3 +333,5 @@ None. Scan scope and CloudCompare decided by the owner 2026-11-07.
 - CloudCompare note: `current` is byte-identical to the Downloads build (exe 2026-09-26), not beta3.
 
 - LosslessCut (Scoop copy) started from the Start menu with the owner's settings (owner check, 2026-11-07).
+
+- After the Claude Code restart, the cloudcompare MCP server reports C:\Tools\CloudCompare\current\CloudCompare.exe, ready (Task 10 step 6).
