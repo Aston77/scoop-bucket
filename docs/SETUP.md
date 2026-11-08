@@ -343,3 +343,15 @@ None. Scan scope and CloudCompare decided by the owner 2026-11-07.
 - GUI database cleanup (remember deleted content on): "77303 entries have been removed" in 1 h 19 min; saved
   907,990 entries (from 985,293). Spec estimate was ~75,092 removed / ~495 tombstones kept; the log gives no
   tombstone count. `ScannedFiles.db` is now 2,642,391,485 B, written by the new build.
+- **Audit and upstream bug.** Comparing CLI exports of the snapshot and the cleaned DB: 75,092 removed entries had
+  no fingerprints (expected), 1,716 were thumbnail-error entries for files still on disk, and 495 were gone files
+  with real fingerprints, i.e. the tombstones that should have been kept. Cause, in the source at 4ab0e82: the
+  GUI's "Clean database" (`CleanDatabaseCommand`) calls `ScanEngine.CleanupDatabase()`, which reads
+  `Scanner.Settings.RememberDeletedContent`. `SyncCoreSettings()` copies that from Settings.json only when a scan
+  starts or thumbnails load, so a cleanup run before any scan in the session gets `false` and does the plain
+  cleanup (every missing file plus error-flagged entries).
+- **Use "Prune ghost entries" instead** (`PruneGhostEntriesCommand`): it removes only gone-from-a-mounted-drive
+  entries with no comparable data, does not depend on that setting, keeps error-flagged entries, and shows the
+  count before removing. Thumbnail-error entries are skipped by scans unless `AlwaysRetryFailedSampling` is on.
+- Restored: current DB saved as snapshot `20261108-081845`, then the pre-cleanup snapshot `20261107-225346` copied
+  back into `C:\Tools\data\vdf` (all 5 files hash-equal).
