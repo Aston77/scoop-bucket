@@ -1,0 +1,56 @@
+{
+    "version": "4.1.20261009.1645",
+    "description": "Video Duplicate Finder daily build (GUI + CLI). Data lives in C:\\Tools\\data\\vdf, outside Scoop.",
+    "homepage": "https://github.com/0x90d/videoduplicatefinder",
+    "license": "AGPL-3.0",
+    "notes": "Built from upstream commit 4ab0e82. Data folder: C:\\Tools\\data\\vdf. CLI: use vdfdb (always passes --db). Never run 'vdf-cli db clean'.",
+    "architecture": {
+        "64bit": {
+            "url": [
+                "https://github.com/0x90d/videoduplicatefinder/releases/download/4.1.x/GUI-win-x64.zip",
+                "https://github.com/0x90d/videoduplicatefinder/releases/download/4.1.x/CLI-win-x64.zip"
+            ],
+            "hash": [
+                "a9cd3677fad60766d215a8afc1eb0eccddd181c69a0ddb7bff306a55021e3909",
+                "bdd103757d4d104187e052beffeb75577f05c7ba27c1bbfd0305e56cad4dcb17"
+            ]
+        }
+    },
+    "pre_install": [
+        "if (-not (Test-Path -LiteralPath \"$persist_dir\\Settings.json\" -PathType Leaf)) {",
+        "    throw 'Seed persist first (Initialize-VdfData.ps1)'",
+        "}"
+    ],
+    "bin": "vdf-cli.exe",
+    "shortcuts": [
+        [
+            "VDF.GUI.exe",
+            "Video Duplicate Finder"
+        ]
+    ],
+    "persist": [
+        "Settings.json",
+        "ai",
+        "bin"
+    ],
+    "checkver": {
+        "url": "https://api.github.com/repos/0x90d/videoduplicatefinder/releases/tags/4.1.x",
+        "regex": "(?s)\"name\":\\s*\"GUI-win-x64\\.zip\".*?\"updated_at\":\\s*\"(?<y>\\d{4})-(?<mo>\\d{2})-(?<d>\\d{2})T(?<h>\\d{2}):(?<mi>\\d{2}).*?Last build based on (?<commit>[0-9a-f]{7,40})",
+        "replace": "4.1.${y}${mo}${d}.${h}${mi}"
+    },
+    "autoupdate": {
+        "notes": "Built from upstream commit $matchCommit. Data folder: C:\\Tools\\data\\vdf. CLI: use vdfdb (always passes --db). Never run 'vdf-cli db clean'.",
+        "architecture": {
+            "64bit": {
+                "url": [
+                    "https://github.com/0x90d/videoduplicatefinder/releases/download/4.1.x/GUI-win-x64.zip",
+                    "https://github.com/0x90d/videoduplicatefinder/releases/download/4.1.x/CLI-win-x64.zip"
+                ]
+            }
+        },
+        "hash": {
+            "url": "https://api.github.com/repos/0x90d/videoduplicatefinder/releases/tags/4.1.x",
+            "jsonpath": "$.assets[?(@.name == '$basename')].digest"
+        }
+    }
+}
