@@ -278,3 +278,25 @@ So:
 ## Open questions for the owner
 
 None. Scan scope and CloudCompare decided by the owner 2026-11-07.
+
+## Install log
+
+### 2026-11-07: Scoop, bucket, VDF data (Tasks 1-7)
+
+- Scoop v0.6.0 in `C:\Tools\scoop` (user env `SCOOP`). Pester 6.2.0 and BuildHelpers for the bucket tests.
+- Bucket `Aston77/scoop-bucket` (default branch `master`), cloned to `C:\Tools\scoop-bucket`; `tools\` is on the
+  user PATH. CI and Excavator green.
+- Seeded by `tools\Initialize-VdfData.ps1` (copies only, SHA256-verified): `C:\Tools\data\vdf\ScannedFiles.db`
+  2,672,018,461 B, `UnionEmbeddings.db` 915,272,114 B, `DenseEmbeddings.db` 57,431,246 B, merged
+  `BlacklistedGroups.json` 113 groups; persist `Settings.json`, `ai\` (6 files), `bin\` (10 FFmpeg 8.x files).
+- `vdf` 4.1.20261009.1645 (upstream commit 4ab0e82) installed from the bucket. `Settings.json` is a hard link,
+  `ai` and `bin` are junctions into `C:\Tools\scoop\persist\vdf`.
+- Manifest hash check: a wrong-hash manifest aborts with "Hash check failed" and leaves no `current`.
+  `scoop update` checks hashes before it uninstalls the old version (scoop-update.ps1), so a replaced daily asset
+  keeps the old version.
+- `Test-VdfAiModel` at 4ab0e82: persisted model matches the pinned SHA256.
+- `vdfdb db export -o <file>`: "Database loaded: 985,293 entries", exported 985,293; `ScannedFiles.db` unchanged.
+- `scoop update vdf --force`: `Settings.json`, `ai`, `bin` and `ScannedFiles.db` hashes unchanged.
+- Data folder renamed to `vdf.off`: `vdfdb` refuses ("VDF data folder not found: C:\Tools\data\vdf ...") and writes
+  nothing. The GUI itself would fall back silently to an empty database in the app folder, so launch the GUI only
+  after an update has been checked (`Invoke-VdfPostUpdateCheck`, or the nightly task's `checks.log`).
