@@ -359,3 +359,4 @@ None. Scan scope and CloudCompare decided by the owner 2026-11-07.
   495 tombstones + 1,716 thumbnail-error entries kept). Took about 2 h on the USB disk: it checks every entry's file
   once to count and again after the confirm. This build doesn't disable the button while it runs, so a double
   click starts two counts (cancelling the second dialog is harmless).
+- Faulty post-cleanup snapshot 20261108-081845 deleted (owner OK); kept: 20261107-225346 (pre-cleanup).
