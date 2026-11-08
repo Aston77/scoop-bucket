@@ -325,3 +325,9 @@ None. Scan scope and CloudCompare decided by the owner 2026-11-07.
   it read `C:\Tools\data\vdf`. This build logs nothing at startup about FFmpeg or AI; check those at the first scan.
 - With the GUI open, `scoop update vdf --force` refused ("still running ... skip updating") and changed nothing.
   Scoop exits 0 in this case, so scripts must not read success from the exit code.
+
+### 2026-11-07: UniGetUI sees vdf (Task 8 step 1)
+
+- UniGetUI had been running since before Scoop was installed, so it could not see Scoop. After a full quit and
+  restart it lists `vdf` under installed packages. The Scoop cleanup settings are still unset (off).
+- CloudCompare note: `current` is byte-identical to the Downloads build (exe 2026-09-26), not beta3.
