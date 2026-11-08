@@ -335,3 +335,11 @@ None. Scan scope and CloudCompare decided by the owner 2026-11-07.
 - LosslessCut (Scoop copy) started from the Start menu with the owner's settings (owner check, 2026-11-07).
 
 - After the Claude Code restart, the cloudcompare MCP server reports C:\Tools\CloudCompare\current\CloudCompare.exe, ready (Task 10 step 6).
+
+### 2026-11-07/08: first scans (Task 9)
+
+- Snapshot before cleanup (D: mounted, VDF closed): `C:\Tools\data\vdf-snapshots\20261107-225346`, 5 data files,
+  3,644,744,997 B.
+- GUI database cleanup (remember deleted content on): "77303 entries have been removed" in 1 h 19 min; saved
+  907,990 entries (from 985,293). Spec estimate was ~75,092 removed / ~495 tombstones kept; the log gives no
+  tombstone count. `ScannedFiles.db` is now 2,642,391,485 B, written by the new build.
