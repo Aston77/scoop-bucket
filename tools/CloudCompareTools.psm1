@@ -95,7 +95,7 @@ function Invoke-CloudCompare([string]$Exe, [string[]]$CcArgs, [string]$WorkDir) 
     # Start-Process joins arguments with spaces and adds no quotes, so encode each one for the Windows command line.
     # A FILE name with a space must also carry its own quotes (see the space check below).
     $quoted = (@('-SILENT', '-AUTO_SAVE', 'OFF') + $CcArgs) |
-        ForEach-Object { $_ -match '[\s"]' ? ('"' + ($_ -replace '"', '\"') + '"') : $_ }
+        ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }
     $p = Start-Process -FilePath $Exe -ArgumentList $quoted `
         -WorkingDirectory $WorkDir -Wait -PassThru -WindowStyle Hidden
     $p.ExitCode
@@ -141,7 +141,8 @@ function Test-CloudCompareSmoke {
         $c = $checks[$name]
         $code = Invoke-CloudCompare -Exe $Exe -CcArgs $c.Args -WorkDir $dir
         $pass = (Test-Path -LiteralPath $c.Out) -and (Get-Item -LiteralPath $c.Out).Length -gt 0
-        Write-Host ('{0} {1} (exit {2})' -f ($pass ? 'PASS' : 'FAIL'), $name, $code)
+        $label = if ($pass) { 'PASS' } else { 'FAIL' }
+        Write-Host ('{0} {1} (exit {2})' -f $label, $name, $code)
         if (-not $pass) { $ok = $false }
     }
     if ($ok) { Remove-Item -LiteralPath $dir -Recurse -Force } else { Write-Host "Smoke outputs kept in $dir" }
