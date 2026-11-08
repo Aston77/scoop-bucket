@@ -331,3 +331,5 @@ None. Scan scope and CloudCompare decided by the owner 2026-11-07.
 - UniGetUI had been running since before Scoop was installed, so it could not see Scoop. After a full quit and
   restart it lists `vdf` under installed packages. The Scoop cleanup settings are still unset (off).
 - CloudCompare note: `current` is byte-identical to the Downloads build (exe 2026-09-26), not beta3.
+
+- LosslessCut (Scoop copy) started from the Start menu with the owner's settings (owner check, 2026-11-07).
