@@ -300,3 +300,19 @@ None. Scan scope and CloudCompare decided by the owner 2026-11-07.
 - Data folder renamed to `vdf.off`: `vdfdb` refuses ("VDF data folder not found: C:\Tools\data\vdf ...") and writes
   nothing. The GUI itself would fall back silently to an empty database in the app folder, so launch the GUI only
   after an update has been checked (`Invoke-VdfPostUpdateCheck`, or the nightly task's `checks.log`).
+
+### 2026-11-07: UniGetUI, LosslessCut, CloudCompare (Tasks 8, 10)
+
+- UniGetUI (read-only check of `%LOCALAPPDATA%\UniGetUI\Configuration`): Scoop is enabled; no
+  `EnableScoopCleanupApps` or `EnableScoopCleanup` setting exists (both off). The `aston77` bucket was added
+  through Scoop, which UniGetUI reads.
+- LosslessCut 3.70.2 from `extras/losslesscut` (Scoop also installed `7zip` 26.06 as a dependency). Settings live in
+  `%APPDATA%\LosslessCut\config.json`, outside the app folder, shared with the old Downloads copy (which has no
+  portable config).
+- CloudCompare: Downloads build copied to `C:\Tools\CloudCompare\v2.14.beta-2026-09-26` (195 files, 390,050,850 B,
+  same as the source); `current` is a junction to it. `Test-CloudCompareSmoke` passed all six checks.
+  Finding: CloudCompare splits a `-SAVE_* FILE` name on spaces unless the argument itself contains quotes, so the
+  command line needs `"\"C:\a b\out.ply\""`; `Invoke-CloudCompare` encodes this.
+- `CLOUDCOMPARE_PATH` in `~/.claude.json` and the Tools line in `C:\Scans\CLAUDE.md` now point at
+  `C:\Tools\CloudCompare\current\CloudCompare.exe`.
+- New CloudCompare betas: watch GitHub CloudCompare/CloudCompare → Watch → Custom → Releases.
