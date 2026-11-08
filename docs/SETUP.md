@@ -316,3 +316,12 @@ None. Scan scope and CloudCompare decided by the owner 2026-11-07.
 - `CLOUDCOMPARE_PATH` in `~/.claude.json` and the Tools line in `C:\Scans\CLAUDE.md` now point at
   `C:\Tools\CloudCompare\current\CloudCompare.exe`.
 - New CloudCompare betas: watch GitHub CloudCompare/CloudCompare → Watch → Custom → Releases.
+
+### 2026-11-07: first GUI start (Task 7 steps 3-4)
+
+- The owner first opened an old Start-menu shortcut `VDF.lnk` that ran the Downloads copy; it was closed and the
+  shortcut deleted. Use "Scoop Apps\Video Duplicate Finder".
+- The Scoop GUI's `log.txt`: "Previously scanned files imported. 985,293 files". No database in the app folder, so
+  it read `C:\Tools\data\vdf`. This build logs nothing at startup about FFmpeg or AI; check those at the first scan.
+- With the GUI open, `scoop update vdf --force` refused ("still running ... skip updating") and changed nothing.
+  Scoop exits 0 in this case, so scripts must not read success from the exit code.
